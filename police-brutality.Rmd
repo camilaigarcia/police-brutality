@@ -1,0 +1,596 @@
+---
+title: "Analysis on the US Police Violence between January 2013 and November 2021"
+author: "Camila Garcia"
+date: "12/10/2021"
+output: html_document
+---
+
+# Project Background
+
+As of November 2021, 910 people have been killed by the Police in the US. The deaths of George Floyd, Breonna Taylor, and Michael Brown have attracted significant attention in the media due to excessive use of force by the police, particularly on racial minorities.  Multiple factors can influence police response when encountering situations related to domestic disturbance, violent crimes, nonviolence offenses, traffic stops, etc. One of these determining factors could be whether the police officer believes that the individual is carrying a weapon or not. I was particularly interested to see if, from the fatal encounters, we could use the variables in the data set to predict whether an individual is armed or not. This information could be particularly important to develop future training for police officers and prevent some of these killings. This report includes Statistical and graphical data analysis to enhance understanding of the content and help identify any particular trends relevant to developing our model. 
+
+This report analyses police killings, referring to those encounters with the police that resulted in an individual being shot, beaten, restrained, intentionally hit by a police vehicle, pepper-sprayed, tasered, or otherwise harmed by police officers, whether on-duty or off-duty. 
+
+The data to perform this analysis was extracted from Mapping Police Violence Inc., a non-profit organization and independent research collaborative collecting comprehensive data on police killings nationwide to quantify the impact of police violence in the US. Data used for this investigation can be found at: https://mappingpoliceviolence.org/aboutthedata 
+
+The dataset analyzed includes 9,677 encounters that occurred between January 1st, 2013 and November 3rd, 2021. It contains 53 variables including relevant information about the victim (age, race, gender), the location where the incident occurred (city, state, latitude and longitude coordinates, geography), how the encountered occurred and how did the officer responded (cause of death of the victim, body camera used, type of encounter, initial encounter reason, etc.), political information (congressional district, representative party), among other variables. 
+
+Please note the data file used to perform this analysis was downloaded on November 18th of 2021. Given the organization updates this data file every weekend information and trends could vary over time.
+
+# Importing File and Data Cleaning
+
+This dataset includes variables formatted in characters, numbers, and int. Based on the dataset structure, the majority of the variables are categorical. Extensive data cleaning was performed in order to analyze the data. This data cleaning consisted in removing null values, performing consistent formatting across multiple variables, changing the name of the columns, creating new ones, and converting the data into numerical values.
+
+
+```{r Importing the data and libraries, warning=FALSE,message=FALSE}
+
+library(MASS)
+library(plyr)
+library(dplyr)
+library(ggplot2)
+library(knitr)
+#library(rnaturalearth)
+#library(rworldmap)
+#library(sf)
+library(tidyverse) 
+
+
+mpv <- read.csv("~/Carnegie_Mellon/Courses/Fall 2021/94842 - Programming R for Analytics/Project/MPV.csv")
+#str(mpv)
+```
+
+## Identifying nulls in the dataset 
+```{r Counting null values }
+
+#Quantifying the number of NULLS 
+na_count <- lapply(mpv,function(x) { length(which(is.na(x)))})
+na_count
+# Source: https://www.edureka.co/community/50920/code-snippet-find-number-null-values-each-column-dataframe 
+
+```
+
+## Removing Nulls
+
+```{r Removing NAs}
+
+#dropping NAs from dataframe 
+mpv_clean <- na.omit(mpv) 
+#head(mpv_clean)
+
+print("Number of rows in dataset:")
+nrow(mpv_clean)
+
+
+```
+
+As observed above, a significant number of nulls were removed from the data set. Our original data of 9,677 encounters was reduced to 4,653. 
+
+
+## Updating column names
+
+The column names of the variables in our dataset are too long. For convenience and to improve readability, some of the column names were updated to shorter versions. 
+
+```{r Updating Column Names, warning=FALSE,message=FALSE}
+
+print("Number of Columns: ") 
+ncol(mpv_clean)
+columns <- colnames(mpv_clean)
+
+col_list <- paste(dQuote(colnames(mpv_clean)), collapse = ", ")
+#Source: https://stackoverflow.com/questions/60987016/convert-column-names-as-a-list-in-r 
+col_list 
+
+```
+
+
+
+
+```{r Column Names}
+
+col_updated <- c("Victims.name", "Victims.age", "Victims.gender", "Victims.race", "image.of.victim", "Date.of.Incident", "Street.Address", "City", "State", "Zipcode", "County", "Agency.resp", "ORI.Agency.ID", "Cause.of.death", "description.circumstances", "Official.disposition", "Criminal.Charges", "Link", "mental.illness", "Armed.Unarmed", "Alleged.Weapon", "Alleged.Threat", "Fleeing", "Body.Camera", "WaPo.ID", "Off.Duty.Killing", "Geography", "MPV.ID", "Fatal.Encounters.ID", "Encounter.Type", "Initial.Reason", "Names.of.Officers", "Race.of.Officers", "Past.Shootings.Officer", "Call.for.Service", "Census.Tract.Code", "HUD.UPSAI.Geography", "Urban.Rural", "Median.Income", "Latitude", "Longitude", "Total.Population", "White.Non.Hisp.Pct", "Black.Non.Hisp.Pct", "Native.Amer.Pct", "Asian.Pct", "Pacific.Isl.Pct", "Other.Race.Pct", "Hisp.Pct", "Congressional.District", "Rep.Lname", "Rep.Fname", "Rep.Party")
+
+colnames(mpv_clean) <- col_updated
+
+colnames(mpv_clean)
+  
+```
+
+
+## Standarization of variables
+
+The format of the data points in the raw data is very inconsistent. Steps below were taken to standardize such variables. This process included the removal of some nulls that were coded as characters values (Unknown instead of NA), transforming variables from characters to numeric, and creating a new column for the year. 
+
+Some external resources were used to find code for the transformation of characters to date, trim variables that were causing issues in the standardization process, and the transformation from characters to percentages.  
+
+
+```{r Continuing Data Cleaning }
+
+#Removing values as "Unknown"
+mpv_clean$Victims.age[mpv_clean$Victims.age == "Unknown"] <- NA
+sum(is.na(mpv_clean$Victims.age))
+mpv_clean$Victims.age = as.numeric(mpv_clean$Victims.age)
+
+#"Standarizing variables"
+mpv_clean$Body.Camera[mpv_clean$Body.Camera == "yes"] <- "Yes"
+mpv_clean$Body.Camera[mpv_clean$Body.Camera == "no"] <- "No"
+mpv_clean$Body.Camera[mpv_clean$Body.Camera == "Bystander Video"] <- "Other"
+mpv_clean$Body.Camera[mpv_clean$Body.Camera == "surveillance video"] <- "Other"
+mpv_clean$Body.Camera[mpv_clean$Body.Camera == "Surveillance video"] <- "Other"
+mpv_clean$Body.Camera[mpv_clean$Body.Camera == "Surveillance Video"] <- "Other"
+
+mpv_clean$mental.illness[mpv_clean$mental.illness == "Unknown"] <- "Unclear"
+mpv_clean$mental.illness[mpv_clean$mental.illness == "unknown"] <- "Unclear"
+mpv_clean$mental.illness[mpv_clean$mental.illness == "Drug or alcohol use"] <- "Drug or Alcohol Use"
+
+mpv_clean$Armed.Unarmed <- str_trim(mpv_clean$Armed.Unarmed, side= c("both", "left", "right"))
+# Source: https://stringr.tidyverse.org/reference/str_trim.html
+mpv_clean$Armed.Unarmed[mpv_clean$Armed.Unarmed == "Allegedly armed"] <- "Allegedly Armed"
+
+mpv_clean$Fleeing <- str_trim(mpv_clean$Fleeing, side= c("both", "left", "right"))
+mpv_clean$Fleeing[mpv_clean$Fleeing == "car"] <- "Car"
+mpv_clean$Fleeing[mpv_clean$Fleeing == "foot"] <- "Foot"
+mpv_clean$Fleeing[mpv_clean$Fleeing == "not fleeing"] <- "Not Fleeing"
+mpv_clean$Fleeing[mpv_clean$Fleeing == "Not fleeing"] <- "Not Fleeing"
+mpv_clean$Fleeing[mpv_clean$Fleeing == "other"] <- "Other"
+
+#Transforming string percentages to number
+mpv_clean$White.Non.Hisp.Pct = as.numeric(gsub("[\\%,]", "", mpv_clean$White.Non.Hisp.Pct))*.01
+mpv_clean$Asian.Pct = as.numeric(gsub("[\\%,]", "", mpv_clean$Asian.Pct))*.01
+mpv_clean$Hisp.Pct = as.numeric(gsub("[\\%,]", "", mpv_clean$Hisp.Pct))*.01
+mpv_clean$Black.Non.Hisp.Pct = as.numeric(gsub("[\\%,]", "", mpv_clean$Black.Non.Hisp.Pct))*.01
+mpv_clean$Native.Amer.Pct = as.numeric(gsub("[\\%,]", "", mpv_clean$Native.Amer.Pct))*.01
+mpv_clean$Pacific.Isl.Pct = as.numeric(gsub("[\\%,]", "", mpv_clean$Pacific.Isl.Pct))*.01
+mpv_clean$Other.Race.Pct = as.numeric(gsub("[\\%,]", "", mpv_clean$Other.Race.Pct))*.01
+#Source: https://datascience.stackexchange.com/questions/41605/removing-percentage-signs-with-r
+
+mpv_clean$Date.of.Incident <- as.Date(mpv_clean$Date.of.Incident, format = "%m/%d/%Y")
+mpv_clean$year <- as.numeric(format(mpv_clean$Date.of.Incident,"%Y"))
+# Source: https://www.rdocumentation.org/packages/base/versions/3.6.2/topics/as.Date 
+
+mpv_clean <- na.omit(mpv_clean)
+
+print("Total Number of Rows: ")
+nrow(mpv_clean)
+
+```
+
+
+## Transformation of data from categorical to numeric 
+
+Some of the categorical variables in our dataset were transformed into numerical variables by assigning numbers to each category from 0 to 6 depending on the variable. Please note not all the categorical variables were transformed given the significant variation of categories.
+
+```{r Transforming data }
+
+mpv_num <- mpv_clean 
+#str(mpv_num)
+
+mpv_num$Victims.age = as.numeric(mpv_num$Victims.age)
+mpv_num$Total.Population = as.numeric(mpv_num$Total.Population)
+mpv_num$Median.Income = as.numeric(mpv_num$Median.Income)
+
+
+#Gender
+mpv_num$Victims.gender[mpv_num$Victims.gender == "Male"] <- 0
+mpv_num$Victims.gender[mpv_num$Victims.gender == "Female"] <- 1
+mpv_num$Victims.gender[mpv_num$Victims.gender == "Transgender"] <- 2
+mpv_num$Victims.gender[mpv_num$Victims.gender == "Unknown"] <- 3
+mpv_num$Victims.gender <- as.numeric(mpv_num$Victims.gender)
+
+#Body Camera
+mpv_num$Body.Camera[mpv_num$Body.Camera == "No"] <- 0
+mpv_num$Body.Camera[mpv_num$Body.Camera == "Yes"] <- 1
+mpv_num$Body.Camera[mpv_num$Body.Camera == "Other"] <- 2
+mpv_num$Body.Camera <- as.numeric(mpv_num$Body.Camera)
+
+
+#Geography 
+mpv_num$Geography[mpv_num$Geography == "Rural"] <- 0
+mpv_num$Geography[mpv_num$Geography == "Suburban"] <- 1
+mpv_num$Geography[mpv_num$Geography == "Urban"] <- 2
+mpv_num$Geography[mpv_num$Geography == "Undetermined"] <- 3
+mpv_num$Geography <- as.numeric(mpv_num$Geography)
+
+
+#Rep.Party
+mpv_num$Rep.Party[mpv_num$Rep.Party == "Democrat"] <- 0
+mpv_num$Rep.Party[mpv_num$Rep.Party == "Republican"] <- 1
+mpv_num$Rep.Party <- as.numeric(mpv_num$Rep.Party)
+
+
+#Race
+mpv_num$Victims.race[mpv_num$Victims.race == "White"] <- 0
+mpv_num$Victims.race[mpv_num$Victims.race == "Black"] <- 1
+mpv_num$Victims.race[mpv_num$Victims.race == "Asian"] <- 2
+mpv_num$Victims.race[mpv_num$Victims.race == "Hispanic"] <- 3
+mpv_num$Victims.race[mpv_num$Victims.race == "Native American"] <- 4
+mpv_num$Victims.race[mpv_num$Victims.race == "Pacific Islander"] <- 5
+mpv_num$Victims.race[mpv_num$Victims.race == "Unknown race"] <- 6
+mpv_num$Victims.race<- as.numeric(mpv_num$Victims.race)
+
+
+#Armmed.Unarmed
+mpv_num$Armed.Unarmed[mpv_num$Armed.Unarmed == "Unarmed/Did Not Have Actual Weapon"] <- 0
+mpv_num$Armed.Unarmed[mpv_num$Armed.Unarmed == "Allegedly Armed"] <- 1
+mpv_num$Armed.Unarmed[mpv_num$Armed.Unarmed == "Unclear"] <- 2
+mpv_num$Armed.Unarmed[mpv_num$Armed.Unarmed == "Vehicle"] <- 3
+mpv_num$Armed.Unarmed <- as.numeric(mpv_num$Armed.Unarmed)
+
+#Mental Illness
+mpv_num$mental.illness[mpv_num$mental.illness == "No"] <- 0
+mpv_num$mental.illness[mpv_num$mental.illness == "Yes"] <- 1
+mpv_num$mental.illness[mpv_num$mental.illness == "Unclear"] <- 2
+mpv_num$mental.illness[mpv_num$mental.illness == "Drug or Alcohol Use"] <- 2
+mpv_num$mental.illness <- as.numeric(mpv_num$mental.illness)
+
+
+#Fleeing
+mpv_num$Fleeing[mpv_num$Fleeing == "Not Fleeing"] <- 0
+mpv_num$Fleeing[mpv_num$Fleeing == "Car"] <- 1
+mpv_num$Fleeing[mpv_num$Fleeing == "Foot"] <- 2
+mpv_num$Fleeing[mpv_num$Fleeing == "Other"] <- 3
+mpv_num$Fleeing <- as.numeric(mpv_num$Fleeing)
+
+#Cause of Death
+mpv_num$Cause.of.death[mpv_num$Cause.of.death == "Gunshot"] <- 0
+mpv_num$Cause.of.death[mpv_num$Cause.of.death == "Gunshot, Bean Bag Gun"] <- 1
+mpv_num$Cause.of.death[mpv_num$Cause.of.death == "Gunshot, Pepper Spray"] <- 2
+mpv_num$Cause.of.death[mpv_num$Cause.of.death == "Gunshot, Police Dog"] <- 3
+mpv_num$Cause.of.death[mpv_num$Cause.of.death == "Gunshot, Taser"] <- 4
+mpv_num$Cause.of.death[mpv_num$Cause.of.death == "Gunshot, Taser, Baton"] <- 5
+mpv_num$Cause.of.death[mpv_num$Cause.of.death == "Gunshot, Unspecified Less Lethal Weapon"] <- 6
+mpv_num$Cause.of.death <- as.numeric(mpv_num$Cause.of.death)
+
+```
+
+# Exploratory Data Analysis (EDA)
+
+## Structure of cleaned categorical dataset
+```{r cleaned cat dataset}
+summary(mpv_clean)
+```
+
+
+## Structure of cleaned numerical dataset
+```{r numerical dataset}
+summary(mpv_num)
+```
+
+
+## Statistical EDA
+
+Tables below provide insights into the composition of the data. This information is relevant to understand the characteristic of the variables that will serve as predictors in the classification of Armed/Unarmed (target variable). Correlation, t-test, and ANOVA test were performed on different variables against our target variable to explore in more detail some of these relations. 
+
+
+### Count and Proportion of fatalities per race and gender 
+```{r race vs gender, echo=FALSE}
+
+table1 <- table(mpv_clean$Victims.race, mpv_clean$Victims.gender)
+table1
+prop.table(table1)
+```
+
+Based on the results above, white men are 45.47% of the victims of police violence in the US, followed by black men who are 23.8% of them. These fatal encounters were less frequent in women than men for every race. Transgender individuals were victims of police violence in 8 instances, which represents a very low percentage of the population being analyzed.   
+ 
+
+### Cause of Death per Geography
+```{r Understanging population per Geography and Cause of Death }
+
+table2 <- table(mpv_clean$Cause.of.death,mpv_clean$Geography)
+table2
+
+```
+
+The results above revealed that the largest number of fatalities due to police violence occurred in suburban areas with a total of 2,340, followed by rural areas with a total of 1,098. A gunshot is the most common cause of death, followed by the use of a taser in combination with a gunshot. 
+
+
+
+### Use of Body Camera by the officer vs. Representative's Party in Congress
+```{r body camera vs party}
+
+table4 <- table(mpv_clean$Rep.Party, mpv_clean$Body.Camera)
+table4
+
+prop.table(table4)
+
+```
+
+In 3,933 of the encounters, the officer did not use a body camera. The proportion of officers who do not use a body camera is higher if the Congress Representative where the encounter occurred is Republican. The proportion of incidents where another form of recording occurred such as surveillance video is very low. Only 10.6% of the fatalities occurred when the office had a body camera.
+
+
+### Armed/Unarmed individuals based on mental illness
+
+```{r armed vs illness }
+
+df1 <- subset(mpv_clean, mpv_clean$mental.illness != "Drug or Alcohol Use")
+table <- table(df1$Armed.Unarmed, df1$mental.illness)
+#make copy of data frame - droping rows that have drug alcohol 
+table
+
+```
+
+The victim was allegedly armed in 3,402 encounters, a majority showed no signs of mental illness. In 459 cases it was unclear whether the individual had a mental illness. In 336 instances it was unclear whether the individual was carrying an arm. 
+
+The vehicle classification under Armed. Unarmed corresponds to instances where the victim was killed while hitting, dragging, or driving towards officers or civilians, a driver who was killed while hitting, dragging, or driving towards officers or civilians, and/or a driver who was driving and/or being pursued by police at high speeds, presenting a danger to the public. Only 217 cases correspond to this category.
+
+
+### Correlation between Armed/Unarmed and Race
+
+```{r Correlation}
+
+cor.test(mpv_num$Armed.Unarmed, mpv_num$Victims.race)
+
+```
+
+Race does not seem to impact whether the individual was allegedly carrying an arm when encountered with the police.
+
+
+### Anova Test
+
+```{r Anova Test}
+
+anova <- aov(Armed.Unarmed ~ Rep.Party, data = mpv_num)
+summary(anova)
+
+```
+
+Based on the results above, we fail to reject the null hypothesis as we do not have enough evidence to determine if the party of the congressional representative (democrat or republican) impacts whether the victim was allegedly armed (armed, unarmed, unclear, and vehicle).  
+
+
+### T-test
+```{r t-test}
+
+df3 <- mpv_num$Armed.Unarmed[mpv_num$Victims.gender == 0]
+df4 <- mpv_num$Armed.Unarmed[mpv_num$Victims.gender == 1]
+
+t.test(df3, df4, conf.level = 0.95)
+
+```
+
+Given the p-value is greater than alpha, we fail to reject the null hypothesis concluding we do not have sufficient evidence to determine whether the mean of allegedly being armed (or unarmed) is equal for men and women. 
+
+
+## Graphical EDA
+
+The section below includes graphs that provide further insights into the data.
+
+
+### Map Vizualization
+
+```{r pressure, echo=FALSE}
+
+#Plottting US Map with location of encounters 
+
+library(maps)
+
+MainStates <- map_data("state")
+
+States <- read.csv("https://raw.githubusercontent.com/ds4stats/r-tutorials/master/intro-maps/data/StatePopulation.csv", as.is = TRUE)
+
+ggplot2::ggplot() + geom_polygon( data=MainStates, aes(x=long, y=lat, group=group),
+                color="black", fill=" lightblue" ) + geom_point(data = mpv_clean, mapping = aes(x = Longitude , y = Latitude),col = "darkblue", alpha = .5) + ggtitle("Location of Police Brutality Incidents in the US (2015 - 2021)") + xlab("Longitude") + ylab("Latitude")
+
+#Source of Code: https://remiller1450.github.io/s230s19/Intro_maps.html 
+
+
+```
+
+The blue dots in the map above represent the location (coordinates) where the encounters between the police and the victims occurred. The majority of incidents seem to be concentrated on the east coast. 
+
+### Number of Police Violence Encounters per Year (2015 - 2021) 
+
+```{r Incidents per year}
+
+#States with largest # of Incidents 
+
+table6 <- table(mpv_clean$year)
+
+barplot(table6, col= "darkblue")
+
+```
+
+While the number of violent encounters with the police stayed about the same between 2015 and 2019, we can observe a decrease in 2020 and 2021. This decrease is most likely associated with social distancing and curfews imposed during the COVID-19 pandemic rather than a reform in the police. 
+
+### States with Highest Number of Police Brutality Incidents (2015-2021)
+
+```{r State with Largest numbers of Incidents}
+
+#States with logest incidents 
+
+#finding states with most and lowest number of incidents
+
+table6 <- ddply(mpv_clean, c('State'), summarize, count_inc= n())
+df6 <- as.data.frame(table6)
+df6_ordered <-  df6[order(df6$count_inc),]
+
+top_states <- tail(df6_ordered, 5)
+bottom_states <- head(df6_ordered, 5)
+
+#finding states with the least incidents
+
+top_states2 <- filter(mpv_clean, State == "NC" | State == "GA" | State == "FL" | State == "TX" | State == "CA")
+bottom_states2 <- filter(mpv_clean, State == "RI" | State == "WY" | State == "MD" | State == "DE" | State == "SD")  
+
+table8 <- ddply(top_states2, c('State','year'), summarize, count= n())
+
+graph1 <- ggplot(data = table8, aes(x = year, y = count, fill = State))
+graph1 + facet_grid(~ State) + geom_bar(stat = "identity") + ylab("Count per State") + xlab("Year") + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + ggtitle("Count of Police Violence Encounters in Top 5 States")
+
+```
+
+The five states with the largest number of encounters in our dataset are California (CA), Florida (FL), Georgia (GA), North Carolina (NC), and Texas (TX). A significant decrease in police violence is seen for 2021 across all states due to COVID-19. Between 2015 and 2020, the number of encounters in California has decreased by more than 50%  Texas seems to be decreasing since 2015 with the exception of a peak in 2019. Between 2015 and 2020, the number of incidents in Georgia and North Carolina has remained constant with the exception of 2018 in Georgia. Florida had its peak in 2020 and a significant decline in 2021.   
+
+
+### States with Lowest Number of Police Brutality Incidents (2015-2021)
+
+
+```{r Lowest per Year}
+
+
+table9 <- ddply(bottom_states2, c('State','year'), summarize, count= n())
+
+graph2 <- ggplot(data = table9, aes(x = year, y = count, fill = State))
+graph2 + facet_grid(~ State) + geom_bar(stat = "identity") + ylab("Count per State") + xlab("Year") + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + ggtitle("Count of Police Violence Encounters in Bottom 5 States")
+
+
+```
+
+The states with the lowest number of cases are Delaware, Maryland, Rhode Island, South Dakota, and Wyoming. All with the exception of Maryland had less than 5 cases between 2015 and 2021. For 5 out of the 7 years observed, Maryland had less than 15 cases. Rhode Island is the state with the less number of cases of all the data sets.
+
+### Victims Age vs Race
+
+```{r Victims Age vs. Race }
+
+
+ggplot(mpv_clean, aes(Victims.age, Victims.race, fill = Victims.race )) +         # Boxplot in ggplot2
+  geom_boxplot() + ggtitle("Distribution of Victims Age pero Race")
+
+
+```
+
+Excluding the Victims of unknown races, the highest average age is found among those who were White and Asian. The largest spread of the data is found also among White as from all racial groups they had the largest number of victims in absolute values. The lowest average age was found among those who were Black and Native American.
+
+
+### Cause of Death per Race
+
+```{r death per race}
+
+table10 <- ddply(mpv_clean, c('Victims.race','Cause.of.death'), summarize, count= n())
+
+levels(table10$Victims.race) <- c("A", "B", "H", "NA", "PI", "Unknown", "W")
+
+graph1 <- ggplot(data = table10, aes(x = Cause.of.death, y = count, fill = Victims.race))
+graph1 +  facet_grid(~ Victims.race, scales = "free_x") + geom_bar(stat = "identity") + coord_flip() + theme(legend.position='none') + ylab("Race") + xlab("Cause of Death") + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+```
+
+When looking at cause of death per race, Gunshot seems to be the cause that is most common across all races. Highest number of deaths can be observed among White and Black individuals. 
+
+
+### Correlation Metric on Selected Variables
+
+The correlation matrix will allow us to identify whether we have variables that could cause collinearity in our model. 
+
+```{r Correlation Matrix}
+
+mpv_df <- mpv_num[, c("Victims.age","Victims.gender", "Victims.race","Cause.of.death","mental.illness", "Armed.Unarmed",   "Fleeing", "Body.Camera", "Geography", "Median.Income", "Total.Population", "White.Non.Hisp.Pct", "Black.Non.Hisp.Pct", "Native.Amer.Pct", "Asian.Pct", "Pacific.Isl.Pct", "Other.Race.Pct", "Hisp.Pct", "Rep.Party", "year" )]
+
+mpv_df2<- na.omit(mpv_df) 
+
+
+library(corrplot)
+corrdata <- cor(mpv_df2)
+corrplot(corrdata)
+
+```
+
+
+A new data frame was created to include only the numerical variables that were already numerical in the dataset and the ones that were transformed from categorial variables into numerical. This data frame will be used for the classification model below. 
+
+The correlation metrics indicate that from all the variables in our dataset only the percentage of the populations between white non-hispanic and black non-hispanic were strongly correlated. The rest of the variables showed low levels of correlation. 
+
+
+# Clasification of Armed/Unarmed
+
+In this section, a KNN model will be applied to predict whether the victims of police violence were armed or unarmed based on the features in the dataset captured when encountered ocurred. The purpose of doing this is to potentially prevent future fatalities by adjusting police trainings. 
+
+The intention of this model is to predict the target variable with an accuracy score above 80%. 
+
+## Splitting the data
+```{r split data, warning=FALSE,message=FALSE }
+
+library(caret)
+
+mpv_df2$Armed.Unarmed <- as.factor(mpv_df2$Armed.Unarmed)
+
+
+set.seed(1000)
+#partition the data into a 70%/30% training/testing split
+inTrain <- caret::createDataPartition(y = mpv_df2$Armed.Unarmed,
+                               p = .70,
+                               list = FALSE)
+
+training <- mpv_df2[inTrain, ]
+testing <- mpv_df2[-inTrain, ]
+
+
+ctrl <- trainControl(method="repeatedcv", repeats=5)
+
+
+```
+
+
+## Fitting data in the model
+```{r KNN fit}
+
+knnFit <- train(Armed.Unarmed ~ .,
+                data=training,
+                method="knn", metric="Accuracy",
+                trControl=ctrl)
+knnFit
+
+```
+
+## Testing set predictions
+
+```{r predictions}
+
+knnClasses <- predict(knnFit, newdata = testing)
+knnClasses
+
+```
+
+## Performance Measures 
+```{r performance measures }
+
+#performance measurement
+postResample(knnClasses, testing$Armed.Unarmed)
+
+```
+
+
+## Confusion Matrix
+```{r confusion matrix }
+
+#confusion matrix
+cmknn <-confusionMatrix(knnClasses, testing$Armed.Unarmed)
+print(cmknn)
+
+```
+
+By using the KNN model fitted for the best number of neighbors (k=9), the model was able to predict the individuals who were armed/unarmed with an accuracy score of 77%. While reviewing the results by class, this model predicted in most instances those who were allegedly armed. However, when it comes to those who were "unarmed", "unclear" and "vehicle" all instances were predicted incorrectly as armed. Other techniques could be applied to improve this model, however, they are currently out of the scope of this analysis.
+
+# Conclusions and Recomendations
+
+Based on the analysis above, here are a few takeaways: 
+- The number of police brutality encounters is the highest among White and Black men in absolute numbers. 
+- Majority of the incidents occurred in suburban areas. 
+- The officers did not use a body camera in more than 70% of the cases. 
+- Both gender and party of representative do not seem to be significant on whether an individual is alleged to be armed or unarmed.  
+- Overall, the number of fatal police encounters has remained constant in the past 7 years, which the expectation of 2021 due to COVID-19. 
+- The most common cause of death was gunshot across all races. 
+- No significant correlation was found among the variables used for the classification model. 
+
+
+While the KNN provided an accuracy score of 77%, this is insufficient to predict correctly those classes different from allegedly armed. A few recommendations to improve the model would be: 
+- adding additional variables into the model that could help determine classes more precisely.
+- trying additional classification models such as Naive Bayes, Decision Trees and Logistic Regression.
+- performing oversampling to make the number of data points equal for each category.  
+- transform the data using PCA.  
+
+
+# Project Limitations
+
+- When removing Null values, the dataset was reduced to more than half. As such, this could have influenced the results obtained. 
+- Not all of the variables were analyzed as part of EDA or included in the classification model due to the lack of consistency in the data, Future work should consider exploring the possibilities of adding this information into the model
+- Median Income and percentages per race were not used as part of the EDA analysis as it was unclear at which level of income and % of the population this information was provided (state, level, county, Census track code, zip code, etc.)
+- Police brutality fatalities should be looked at considering % of population per race as looking at absolute values does not take population size into account. 
+
+
+
+
+
+
+
+
+
